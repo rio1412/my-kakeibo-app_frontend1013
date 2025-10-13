@@ -1,12 +1,4 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+@@ -3,3 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      { source: '/api/:path*', destination: 'https://acoount251013kakei.onrender.com/api/:path*' },
-    ]
-  },
 }
 module.exports = nextConfig
-
-

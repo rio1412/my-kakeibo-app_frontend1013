@@ -483,7 +483,7 @@ export default function TransactionsPage() {
                                   fontSize: 14,
                                   fontWeight: 700
                                 }}>{tx.category}</span>
-                                <span style={{ color: "#B5DEFF", fontSize: 14, fontWeight: 600 }}>📅 {tx.date}</span>
+                                <span style={{ color: "#B5DEFF", fontSize: 14, fontWeight: 600 }}>📅 {formatDate(new Date(tx.date))}</span>
                               </div>
                               {tx.note && <p style={{ color: "#FF99DD", fontSize: 14, margin: "4px 0 0 36px", fontWeight: 500 }}>{tx.note}</p>}
                             </div>

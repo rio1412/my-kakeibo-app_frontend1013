@@ -2,29 +2,18 @@
 import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/router";
-
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
-  const login = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const login = async () => {
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/login`,
-        { username, password },
-        { withCredentials: true }
-      );
+      await axios.post(${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/login, { username, password }, { withCredentials: true });
       router.push("/transactions");
     } catch (err: any) {
       alert(err.response?.data?.detail || "ログイン失敗");
-    } finally {
-      setLoading(false);
     }
   };
-
   return (
     <>
       <style jsx global>{`
@@ -102,7 +91,7 @@ export default function LoginPage() {
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent"
             }}>
-              家計簿アプリ
+              さわやか家計簿
             </h1>
             <p style={{
               fontSize: 14,

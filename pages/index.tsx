@@ -7,7 +7,6 @@ export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();

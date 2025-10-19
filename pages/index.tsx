@@ -2,18 +2,21 @@
 import { useState } from "react";
 import axios from "axios";
 import { useRouter } from "next/router";
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
   const login = async () => {
     try {
-      await axios.post(${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/login, { username, password }, { withCredentials: true });
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/login`, { username, password }, { withCredentials: true });
       router.push("/transactions");
     } catch (err: any) {
       alert(err.response?.data?.detail || "ログイン失敗");
     }
   };
+
   return (
     <div style={{ maxWidth: 420, margin: "50px auto", padding: 20, border: "1px solid #ddd", borderRadius: 8 }}>
       <h2>家計簿アプリ — ログイン</h2>

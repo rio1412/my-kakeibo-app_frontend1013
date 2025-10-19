@@ -103,7 +103,7 @@ export default function LoginPage() {
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent"
             }}>
-              さわやか家計簿
+              家計簿アプリ
             </h1>
             <p style={{
               fontSize: 14,

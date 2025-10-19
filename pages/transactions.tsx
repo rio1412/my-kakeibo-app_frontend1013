@@ -12,9 +12,10 @@ type Tx = {
   amount: number;
   date: string;
   note?: string;
+  type?: string; // 'income' or 'expense'
 };
 
-const CATEGORIES = [
+const EXPENSE_CATEGORIES = [
   { value: "食費", label: "食費 🍔", emoji: "🍔" },
   { value: "交通費", label: "交通費 🚌", emoji: "🚌" },
   { value: "光熱費", label: "光熱費 💡", emoji: "💡" },
@@ -23,16 +24,20 @@ const CATEGORIES = [
   { value: "その他", label: "その他 📝", emoji: "📝" }
 ];
 
+const INCOME_CATEGORIES = [
+  { value: "給与", label: "給与 💰", emoji: "💰" },
+  { value: "副業", label: "副業 💻", emoji: "💻" },
+  { value: "ボーナス", label: "ボーナス 🎁", emoji: "🎁" },
+  { value: "その他収入", label: "その他収入 ✨", emoji: "✨" }
+];
+
 export default function TransactionsPage() {
   const [txs, setTxs] = useState<Tx[]>([]);
   const [loading, setLoading] = useState(true);
+  const [transactionType, setTransactionType] = useState<"income" | "expense">("expense");
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
-  // ✅ 初期値を現在時刻の "YYYY-MM-DD" 形式で設定
-  const [date, setDate] = useState(() => {
-    const now = new Date();
-    return now.toISOString().split("T")[0];
-  });
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]); // 今日の日付をデフォルト設定
   const [note, setNote] = useState("");
   const [formLoading, setFormLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -49,7 +54,13 @@ export default function TransactionsPage() {
     setLoading(true);
     try {
       const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/transactions`, { withCredentials: true });
-      setTxs(res.data);
+      // バックエンドがtypeをサポートしていない場合の暫定対応
+      // カテゴリ名で収入を判定
+      const processedTxs = res.data.map((tx: Tx) => ({
+        ...tx,
+        type: tx.type || (["給与", "副業", "ボーナス", "その他収入"].includes(tx.category) ? "income" : "expense")
+      }));
+      setTxs(processedTxs);
     } catch (err) {
       alert("認証エラーかAPI接続エラー");
       window.location.href = "/";
@@ -68,7 +79,7 @@ export default function TransactionsPage() {
     try {
       await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/transactions`,
-        { category, amount: Number(amount), date, note },
+        { category, amount: Number(amount), date, note, type: transactionType },
         { withCredentials: true }
       );
       setCategory("");
@@ -98,19 +109,23 @@ export default function TransactionsPage() {
 
   const pieData = () => {
     const map: Record<string, number> = {};
-    txs.forEach(t => { map[t.category] = (map[t.category] || 0) + t.amount; });
+    txs.filter(t => t.type !== 'income').forEach(t => { 
+      map[t.category] = (map[t.category] || 0) + t.amount; 
+    });
     return {
       labels: Object.keys(map),
       datasets: [{
         data: Object.values(map),
-        backgroundColor: ["#FFB5E8", "#B5DEFF", "#C7FFED", "#FFDEB5", "#E7C6FF", "#FFD4D4"],
+        backgroundColor: ["#B5E8C7", "#B5DEFF", "#E5D4FF", "#FFDEB5", "#FFD4E5", "#C7FFED"],
         borderWidth: 3,
         borderColor: "#ffffff"
       }]
     };
   };
 
-  const totalAmount = txs.reduce((sum, tx) => sum + tx.amount, 0);
+  const totalIncome = txs.filter(t => t.type === 'income').reduce((sum, tx) => sum + tx.amount, 0);
+  const totalExpense = txs.filter(t => t.type !== 'income').reduce((sum, tx) => sum + tx.amount, 0);
+  const balance = totalIncome - totalExpense;
 
   const downloadCSV = async () => {
     try {
@@ -125,8 +140,12 @@ export default function TransactionsPage() {
     }
   };
 
-  const getCategoryEmoji = (cat: string) => {
-    const found = CATEGORIES.find(c => c.value === cat);
+  const getCategoryEmoji = (cat: string, type: string) => {
+    if (type === 'income') {
+      const found = INCOME_CATEGORIES.find(c => c.value === cat);
+      return found ? found.emoji : "✨";
+    }
+    const found = EXPENSE_CATEGORIES.find(c => c.value === cat);
     return found ? found.emoji : "📝";
   };
 
@@ -137,6 +156,8 @@ export default function TransactionsPage() {
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
   };
+
+  const currentCategories = transactionType === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
   return (
     <>
@@ -164,26 +185,31 @@ export default function TransactionsPage() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
         .fade-in { animation: fadeIn 0.5s ease-out; }
         .slide-up { animation: slideUp 0.6s ease-out; }
         .bounce { animation: bounce 2s ease-in-out infinite; }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
         .spinner {
           animation: spin 1s linear infinite;
-          border: 4px solid #FFE5F5;
-          border-top-color: #FFB5E8;
+          border: 4px solid #E5F5ED;
+          border-top-color: #7BE3A8;
           border-radius: 50%;
           width: 48px;
           height: 48px;
         }
         
         .scrollbar::-webkit-scrollbar { width: 10px; }
-        .scrollbar::-webkit-scrollbar-track { background: #FFE5F5; border-radius: 10px; }
-        .scrollbar::-webkit-scrollbar-thumb { background: #FFB5E8; border-radius: 10px; }
-        .scrollbar::-webkit-scrollbar-thumb:hover { background: #FF99DD; }
+        .scrollbar::-webkit-scrollbar-track { background: #E5F5ED; border-radius: 10px; }
+        .scrollbar::-webkit-scrollbar-thumb { background: #7BE3A8; border-radius: 10px; }
+        .scrollbar::-webkit-scrollbar-thumb:hover { background: #5FD88D; }
 
         .cute-select {
           appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23FF69B4' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+          background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%2352C77A' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
           background-repeat: no-repeat;
           background-position: right 12px center;
           padding-right: 40px;
@@ -192,7 +218,7 @@ export default function TransactionsPage() {
 
       <div style={{
         minHeight: "100vh",
-        background: "linear-gradient(135deg, #FFF5F7 0%, #FFE5F5 25%, #E5F5FF 50%, #F5E5FF 75%, #FFF5E5 100%)",
+        background: "linear-gradient(135deg, #F0FFF4 0%, #E5F5ED 25%, #E5F5FF 50%, #F5E5FF 75%, #FFF5E5 100%)",
         padding: "32px 16px"
       }}>
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
@@ -209,24 +235,24 @@ export default function TransactionsPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <div className="bounce" style={{
                 width: 64, height: 64,
-                background: "linear-gradient(135deg, #FFB5E8 0%, #FF99DD 100%)",
+                background: "linear-gradient(135deg, #7BE3A8 0%, #5FD88D 100%)",
                 borderRadius: "50%",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                boxShadow: "0 8px 24px rgba(255, 181, 232, 0.4)",
+                boxShadow: "0 8px 24px rgba(123, 227, 168, 0.4)",
                 fontSize: 32
               }}>
-                💰
+                🌿
               </div>
               <div>
                 <h1 style={{
                   fontSize: 36, fontWeight: 800, margin: 0,
-                  background: "linear-gradient(90deg, #FF69B4 0%, #FFB5E8 50%, #B5DEFF 100%)",
+                  background: "linear-gradient(90deg, #52C77A 0%, #7BE3A8 50%, #B5DEFF 100%)",
                   WebkitBackgroundClip: "text",
                   WebkitTextFillColor: "transparent",
                   letterSpacing: "1px"
                 }}>家計簿アプリ</h1>
-                <p style={{ fontSize: 14, color: "#FF69B4", margin: 0, fontWeight: 500 }}>
-                  ✨ 毎日の支出を管理 ✨
+                <p style={{ fontSize: 14, color: "#52C77A", margin: 0, fontWeight: 500 }}>
+                  ✨ 毎日のお金をすっきり管理 ✨
                 </p>
               </div>
             </div>
@@ -234,45 +260,119 @@ export default function TransactionsPage() {
               background: "white",
               padding: "12px 24px",
               borderRadius: 20,
-              boxShadow: "0 4px 16px rgba(255, 105, 180, 0.15)",
-              border: "2px solid #FFB5E8"
+              boxShadow: "0 4px 16px rgba(82, 199, 122, 0.15)",
+              border: "2px solid #B5E8C7"
             }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "#FF69B4", marginBottom: 4 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "#52C77A", marginBottom: 4 }}>
                 {formatTime(currentTime)}
               </div>
-              <div style={{ fontSize: 12, color: "#FF99DD" }}>
+              <div style={{ fontSize: 12, color: "#7BE3A8" }}>
                 {formatDate(currentTime)}
               </div>
             </div>
           </div>
 
-          {/* Total Amount Card */}
-          <div className="fade-in" style={{
-            background: "linear-gradient(135deg, #FFB5E8 0%, #FFD4E5 100%)",
-            borderRadius: 30,
-            padding: 40,
-            marginBottom: 32,
-            border: "3px solid white",
-            boxShadow: "0 12px 40px rgba(255, 105, 180, 0.25)",
-            position: "relative",
-            overflow: "hidden"
+          {/* Balance Dashboard - 収支が一目でわかる3カードデザイン */}
+          <div style={{ 
+            display: "grid", 
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", 
+            gap: 20, 
+            marginBottom: 32 
           }}>
-            <div style={{
-              position: "absolute",
-              top: -20, right: -20,
-              fontSize: 120,
-              opacity: 0.1
-            }}>🌸</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, position: "relative" }}>
-              <span style={{ fontSize: 32 }}></span>
-              <h2 style={{ fontSize: 20, color: "white", margin: 0, fontWeight: 700 }}>今月の総支出</h2>
+            {/* 収入カード */}
+            <div className="fade-in" style={{
+              background: "linear-gradient(135deg, #7BE3A8 0%, #A8F5C8 100%)",
+              borderRadius: 24,
+              padding: 28,
+              border: "3px solid white",
+              boxShadow: "0 8px 32px rgba(123, 227, 168, 0.3)",
+              position: "relative",
+              overflow: "hidden"
+            }}>
+              <div style={{
+                position: "absolute",
+                top: -20, right: -20,
+                fontSize: 100,
+                opacity: 0.1
+              }}>💰</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ fontSize: 16, color: "white", fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>📈</span>
+                  収入
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, color: "white", textShadow: "0 2px 8px rgba(82, 199, 122, 0.3)" }}>
+                  ¥{totalIncome.toLocaleString()}
+                </div>
+              </div>
             </div>
-            <p style={{
-              fontSize: 56, fontWeight: 800, margin: 0,
-              color: "white",
-              textShadow: "0 2px 8px rgba(255, 105, 180, 0.3)",
-              position: "relative"
-            }}>¥{totalAmount.toLocaleString()}</p>
+
+            {/* 支出カード */}
+            <div className="fade-in" style={{
+              background: "linear-gradient(135deg, #FFB5B5 0%, #FFD4D4 100%)",
+              borderRadius: 24,
+              padding: 28,
+              border: "3px solid white",
+              boxShadow: "0 8px 32px rgba(255, 181, 181, 0.3)",
+              position: "relative",
+              overflow: "hidden",
+              animationDelay: "0.1s"
+            }}>
+              <div style={{
+                position: "absolute",
+                top: -20, right: -20,
+                fontSize: 100,
+                opacity: 0.1
+              }}>💸</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ fontSize: 16, color: "white", fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>📉</span>
+                  支出
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, color: "white", textShadow: "0 2px 8px rgba(255, 105, 105, 0.3)" }}>
+                  ¥{totalExpense.toLocaleString()}
+                </div>
+              </div>
+            </div>
+
+            {/* 残高カード - 大きく目立つデザイン */}
+            <div className={balance >= 0 ? "fade-in pulse" : "fade-in"} style={{
+              background: balance >= 0 
+                ? "linear-gradient(135deg, #FFD700 0%, #FFF176 100%)" 
+                : "linear-gradient(135deg, #FF9999 0%, #FFB5B5 100%)",
+              borderRadius: 24,
+              padding: 28,
+              border: "3px solid white",
+              boxShadow: balance >= 0 
+                ? "0 12px 48px rgba(255, 215, 0, 0.4)" 
+                : "0 12px 48px rgba(255, 153, 153, 0.4)",
+              position: "relative",
+              overflow: "hidden",
+              animationDelay: "0.2s"
+            }}>
+              <div style={{
+                position: "absolute",
+                top: -20, right: -20,
+                fontSize: 100,
+                opacity: 0.15
+              }}>{balance >= 0 ? "✨" : "⚠️"}</div>
+              <div style={{ position: "relative" }}>
+                <div style={{ fontSize: 16, color: "white", fontWeight: 600, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 24 }}>{balance >= 0 ? "🎉" : "😰"}</span>
+                  残高
+                </div>
+                <div style={{ 
+                  fontSize: 40, 
+                  fontWeight: 800, 
+                  color: "white", 
+                  textShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8
+                }}>
+                  {balance >= 0 ? "+" : ""}¥{balance.toLocaleString()}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Transaction Form */}
@@ -281,24 +381,77 @@ export default function TransactionsPage() {
             borderRadius: 30,
             padding: 32,
             marginBottom: 32,
-            border: "3px solid #FFE5F5",
-            boxShadow: "0 12px 40px rgba(255, 181, 232, 0.2)"
+            border: "3px solid #E5F5ED",
+            boxShadow: "0 12px 40px rgba(123, 227, 168, 0.2)"
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
               <span style={{ fontSize: 28 }}>✏️</span>
-              <h2 style={{ fontSize: 24, fontWeight: 800, color: "#FF69B4", margin: 0 }}>新しい支出を追加</h2>
+              <h2 style={{ fontSize: 24, fontWeight: 800, color: "#52C77A", margin: 0 }}>新しい取引を追加</h2>
             </div>
+
+            {/* 収入/支出 切り替えボタン */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setTransactionType("income");
+                  setCategory("");
+                }}
+                style={{
+                  flex: 1,
+                  background: transactionType === "income" 
+                    ? "linear-gradient(135deg, #7BE3A8 0%, #5FD88D 100%)" 
+                    : "#F0FFF4",
+                  color: transactionType === "income" ? "white" : "#52C77A",
+                  border: "2px solid #B5E8C7",
+                  borderRadius: 16,
+                  padding: "14px 24px",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.3s",
+                  boxShadow: transactionType === "income" ? "0 4px 16px rgba(123, 227, 168, 0.3)" : "none"
+                }}
+              >
+                💰 収入
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTransactionType("expense");
+                  setCategory("");
+                }}
+                style={{
+                  flex: 1,
+                  background: transactionType === "expense" 
+                    ? "linear-gradient(135deg, #FFB5B5 0%, #FF99A8 100%)" 
+                    : "#FFF5F5",
+                  color: transactionType === "expense" ? "white" : "#FF6B6B",
+                  border: "2px solid #FFD4D4",
+                  borderRadius: 16,
+                  padding: "14px 24px",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.3s",
+                  boxShadow: transactionType === "expense" ? "0 4px 16px rgba(255, 181, 181, 0.3)" : "none"
+                }}
+              >
+                💸 支出
+              </button>
+            </div>
+
             <form onSubmit={handleSubmit} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="cute-select"
                 style={{
-                  background: "#FFF5F7",
-                  border: "2px solid #FFE5F5",
+                  background: transactionType === "income" ? "#F0FFF4" : "#FFF5F5",
+                  border: transactionType === "income" ? "2px solid #E5F5ED" : "2px solid #FFE5E5",
                   borderRadius: 16,
                   padding: "14px 16px",
-                  color: "#FF69B4",
+                  color: transactionType === "income" ? "#52C77A" : "#FF6B6B",
                   fontSize: 15,
                   fontWeight: 600,
                   outline: "none",
@@ -306,16 +459,18 @@ export default function TransactionsPage() {
                   transition: "all 0.3s"
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = "#FFB5E8";
-                  e.target.style.boxShadow = "0 0 0 4px rgba(255, 181, 232, 0.2)";
+                  e.target.style.borderColor = transactionType === "income" ? "#7BE3A8" : "#FFB5B5";
+                  e.target.style.boxShadow = transactionType === "income" 
+                    ? "0 0 0 4px rgba(123, 227, 168, 0.2)" 
+                    : "0 0 0 4px rgba(255, 181, 181, 0.2)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = "#FFE5F5";
+                  e.target.style.borderColor = transactionType === "income" ? "#E5F5ED" : "#FFE5E5";
                   e.target.style.boxShadow = "none";
                 }}
               >
                 <option value="">カテゴリを選択 ✨</option>
-                {CATEGORIES.map(cat => (
+                {currentCategories.map(cat => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
                 ))}
               </select>
@@ -325,21 +480,24 @@ export default function TransactionsPage() {
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 style={{
-                  background: "#FFF5F7",
-                  border: "2px solid #FFE5F5",
+                  background: transactionType === "income" ? "#F0FFF4" : "#FFF5F5",
+                  border: transactionType === "income" ? "2px solid #E5F5ED" : "2px solid #FFE5E5",
                   borderRadius: 16,
                   padding: "14px 16px",
-                  color: "#FF69B4",
+                  color: transactionType === "income" ? "#52C77A" : "#FF6B6B",
                   fontSize: 15,
                   fontWeight: 600,
-                  outline: "none"
+                  outline: "none",
+                  transition: "all 0.3s"
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = "#FFB5E8";
-                  e.target.style.boxShadow = "0 0 0 4px rgba(255, 181, 232, 0.2)";
+                  e.target.style.borderColor = transactionType === "income" ? "#7BE3A8" : "#FFB5B5";
+                  e.target.style.boxShadow = transactionType === "income" 
+                    ? "0 0 0 4px rgba(123, 227, 168, 0.2)" 
+                    : "0 0 0 4px rgba(255, 181, 181, 0.2)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = "#FFE5F5";
+                  e.target.style.borderColor = transactionType === "income" ? "#E5F5ED" : "#FFE5E5";
                   e.target.style.boxShadow = "none";
                 }}
               />
@@ -348,21 +506,24 @@ export default function TransactionsPage() {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 style={{
-                  background: "#FFF5F7",
-                  border: "2px solid #FFE5F5",
+                  background: transactionType === "income" ? "#F0FFF4" : "#FFF5F5",
+                  border: transactionType === "income" ? "2px solid #E5F5ED" : "2px solid #FFE5E5",
                   borderRadius: 16,
                   padding: "14px 16px",
-                  color: "#FF69B4",
+                  color: transactionType === "income" ? "#52C77A" : "#FF6B6B",
                   fontSize: 15,
                   fontWeight: 600,
-                  outline: "none"
+                  outline: "none",
+                  transition: "all 0.3s"
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = "#FFB5E8";
-                  e.target.style.boxShadow = "0 0 0 4px rgba(255, 181, 232, 0.2)";
+                  e.target.style.borderColor = transactionType === "income" ? "#7BE3A8" : "#FFB5B5";
+                  e.target.style.boxShadow = transactionType === "income" 
+                    ? "0 0 0 4px rgba(123, 227, 168, 0.2)" 
+                    : "0 0 0 4px rgba(255, 181, 181, 0.2)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = "#FFE5F5";
+                  e.target.style.borderColor = transactionType === "income" ? "#E5F5ED" : "#FFE5E5";
                   e.target.style.boxShadow = "none";
                 }}
               />
@@ -370,7 +531,9 @@ export default function TransactionsPage() {
                 type="submit"
                 disabled={formLoading}
                 style={{
-                  background: "linear-gradient(135deg, #FFB5E8 0%, #FF99DD 100%)",
+                  background: transactionType === "income"
+                    ? "linear-gradient(135deg, #7BE3A8 0%, #5FD88D 100%)"
+                    : "linear-gradient(135deg, #FFB5B5 0%, #FF99A8 100%)",
                   color: "white",
                   border: "none",
                   borderRadius: 16,
@@ -380,12 +543,14 @@ export default function TransactionsPage() {
                   cursor: formLoading ? "not-allowed" : "pointer",
                   transition: "all 0.3s",
                   opacity: formLoading ? 0.5 : 1,
-                  boxShadow: "0 4px 16px rgba(255, 181, 232, 0.3)"
+                  boxShadow: transactionType === "income"
+                    ? "0 4px 16px rgba(123, 227, 168, 0.3)"
+                    : "0 4px 16px rgba(255, 181, 181, 0.3)"
                 }}
                 onMouseEnter={(e) => !formLoading && (e.currentTarget.style.transform = "translateY(-2px)")}
                 onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
               >
-                {formLoading ? "追加中... ⏳" : "追加する"}
+                {formLoading ? "追加中... ⏳" : "追加する 🎀"}
               </button>
               <input
                 type="text"
@@ -393,22 +558,25 @@ export default function TransactionsPage() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 style={{
-                  background: "#FFF5F7",
-                  border: "2px solid #FFE5F5",
+                  background: transactionType === "income" ? "#F0FFF4" : "#FFF5F5",
+                  border: transactionType === "income" ? "2px solid #E5F5ED" : "2px solid #FFE5E5",
                   borderRadius: 16,
                   padding: "14px 16px",
-                  color: "#FF69B4",
+                  color: transactionType === "income" ? "#52C77A" : "#FF6B6B",
                   fontSize: 15,
                   fontWeight: 600,
                   outline: "none",
-                  gridColumn: "1 / -1"
+                  gridColumn: "1 / -1",
+                  transition: "all 0.3s"
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = "#FFB5E8";
-                  e.target.style.boxShadow = "0 0 0 4px rgba(255, 181, 232, 0.2)";
+                  e.target.style.borderColor = transactionType === "income" ? "#7BE3A8" : "#FFB5B5";
+                  e.target.style.boxShadow = transactionType === "income" 
+                    ? "0 0 0 4px rgba(123, 227, 168, 0.2)" 
+                    : "0 0 0 4px rgba(255, 181, 181, 0.2)";
                 }}
                 onBlur={(e) => {
-                  e.target.style.borderColor = "#FFE5F5";
+                  e.target.style.borderColor = transactionType === "income" ? "#E5F5ED" : "#FFE5E5";
                   e.target.style.boxShadow = "none";
                 }}
               />
@@ -424,12 +592,12 @@ export default function TransactionsPage() {
                 background: "white",
                 borderRadius: 30,
                 padding: 32,
-                border: "3px solid #FFE5F5",
-                boxShadow: "0 12px 40px rgba(181, 210, 255, 0.2)"
+                border: "3px solid #E5F5ED",
+                boxShadow: "0 12px 40px rgba(181, 232, 199, 0.2)"
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
                   <span style={{ fontSize: 28 }}>📋</span>
-                  <h3 style={{ fontSize: 24, fontWeight: 800, color: "#69B4FF", margin: 0 }}>支出リスト</h3>
+                  <h3 style={{ fontSize: 24, fontWeight: 800, color: "#52C77A", margin: 0 }}>取引リスト</h3>
                 </div>
                 {loading ? (
                   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "80px 0" }}>
@@ -441,12 +609,12 @@ export default function TransactionsPage() {
                       <div style={{ 
                         textAlign: "center", 
                         padding: "60px 20px",
-                        color: "#FFB5E8",
+                        color: "#7BE3A8",
                         fontSize: 18,
                         fontWeight: 600
                       }}>
                         <div style={{ fontSize: 64, marginBottom: 16 }}>🌈</div>
-                        まだ支出がありません
+                        まだ取引がありません
                       </div>
                     ) : (
                       txs.map((tx, idx) => (
@@ -454,8 +622,10 @@ export default function TransactionsPage() {
                           key={tx.id}
                           className="fade-in"
                           style={{
-                            background: "linear-gradient(135deg, #FFF5F7 0%, #F5F5FF 100%)",
-                            border: "2px solid #FFE5F5",
+                            background: tx.type === 'income'
+                              ? "linear-gradient(135deg, #F0FFF9 0%, #F0FFF4 100%)"
+                              : "linear-gradient(135deg, #FFF5F5 0%, #FFF0F0 100%)",
+                            border: tx.type === 'income' ? "2px solid #E5F5ED" : "2px solid #FFE5E5",
                             borderRadius: 20,
                             padding: 20,
                             marginBottom: 12,
@@ -464,7 +634,9 @@ export default function TransactionsPage() {
                           }}
                           onMouseEnter={(e) => {
                             e.currentTarget.style.transform = "translateY(-2px)";
-                            e.currentTarget.style.boxShadow = "0 8px 24px rgba(255, 181, 232, 0.3)";
+                            e.currentTarget.style.boxShadow = tx.type === 'income'
+                              ? "0 8px 24px rgba(123, 227, 168, 0.3)"
+                              : "0 8px 24px rgba(255, 181, 181, 0.3)";
                           }}
                           onMouseLeave={(e) => {
                             e.currentTarget.style.transform = "translateY(0)";
@@ -474,22 +646,38 @@ export default function TransactionsPage() {
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
                             <div style={{ flex: 1, minWidth: 200 }}>
                               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
-                                <span style={{ fontSize: 24 }}>{getCategoryEmoji(tx.category)}</span>
+                                <span style={{ fontSize: 24 }}>{getCategoryEmoji(tx.category, tx.type || 'expense')}</span>
                                 <span style={{
-                                  background: "linear-gradient(135deg, #FFB5E8, #FFD4E5)",
+                                  background: tx.type === 'income'
+                                    ? "linear-gradient(135deg, #7BE3A8, #A8F5C8)"
+                                    : "linear-gradient(135deg, #FFB5B5, #FFD4D4)",
                                   color: "white",
                                   padding: "6px 16px",
                                   borderRadius: 12,
                                   fontSize: 14,
                                   fontWeight: 700
                                 }}>{tx.category}</span>
-                                <span style={{ color: "#B5DEFF", fontSize: 14, fontWeight: 600 }}>📅 {formatDate(new Date(tx.date))}</span>
+                                <span style={{
+                                  background: tx.type === 'income' ? "#E5F5ED" : "#FFE5E5",
+                                  color: tx.type === 'income' ? "#52C77A" : "#FF6B6B",
+                                  padding: "4px 12px",
+                                  borderRadius: 8,
+                                  fontSize: 12,
+                                  fontWeight: 700
+                                }}>
+                                  {tx.type === 'income' ? '収入' : '支出'}
+                                </span>
+                                <span style={{ color: "#B5DEFF", fontSize: 14, fontWeight: 600 }}>📅 {new Date(tx.date).toLocaleDateString('ja-JP')}</span>
                               </div>
-                              {tx.note && <p style={{ color: "#FF99DD", fontSize: 14, margin: "4px 0 0 36px", fontWeight: 500 }}>{tx.note}</p>}
+                              {tx.note && <p style={{ color: tx.type === 'income' ? "#7BE3A8" : "#FF99A8", fontSize: 14, margin: "4px 0 0 36px", fontWeight: 500 }}>{tx.note}</p>}
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                              <span style={{ fontSize: 28, fontWeight: 800, color: "#FF69B4" }}>
-                                ¥{tx.amount.toLocaleString()}
+                              <span style={{ 
+                                fontSize: 28, 
+                                fontWeight: 800, 
+                                color: tx.type === 'income' ? "#52C77A" : "#FF6B6B"
+                              }}>
+                                {tx.type === 'income' ? '+' : '-'}¥{tx.amount.toLocaleString()}
                               </span>
                               <button
                                 onClick={() => handleDelete(tx.id)}
@@ -565,14 +753,14 @@ export default function TransactionsPage() {
               background: "white",
               borderRadius: 30,
               padding: 32,
-              border: "3px solid #FFE5F5",
-              boxShadow: "0 12px 40px rgba(231, 198, 255, 0.25)"
+              border: "3px solid #E5F5ED",
+              boxShadow: "0 12px 40px rgba(199, 232, 231, 0.25)"
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
                 <span style={{ fontSize: 28 }}>🥧</span>
-                <h3 style={{ fontSize: 20, fontWeight: 800, color: "#C599FF", margin: 0 }}>カテゴリ別</h3>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: "#52C77A", margin: 0 }}>支出カテゴリ別</h3>
               </div>
-              {txs.length > 0 ? (
+              {txs.filter(t => t.type !== 'income').length > 0 ? (
                 <Pie
                   data={pieData()}
                   options={{
@@ -580,7 +768,7 @@ export default function TransactionsPage() {
                       legend: {
                         position: "bottom",
                         labels: {
-                          color: "#FF69B4",
+                          color: "#52C77A",
                           padding: 15,
                           font: { size: 13, weight: "bold" }
                         }
@@ -592,12 +780,12 @@ export default function TransactionsPage() {
                 <div style={{ 
                   textAlign: "center", 
                   padding: "40px 20px",
-                  color: "#FFB5E8",
+                  color: "#7BE3A8",
                   fontSize: 16,
                   fontWeight: 600
                 }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>🎨</div>
-                  データがありません
+                  支出データがありません
                 </div>
               )}
             </div>
